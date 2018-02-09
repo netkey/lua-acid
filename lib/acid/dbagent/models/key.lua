@@ -34,7 +34,7 @@ _M.fields = {
     acl = {
         field_type = 'text',
         m = nil,
-        convert_method = 'json',
+        convert_method = 'json_acl',
     },
     sha1 = {
         field_type = 'binary',
@@ -60,7 +60,7 @@ _M.fields = {
     file_meta = {
         field_type = 'text',
         m = nil,
-        convert_method = 'json',
+        convert_method = 'json_null_or_empty_to_table',
     },
     group_id = {
         field_type = 'bigint',
@@ -77,7 +77,7 @@ _M.fields = {
     multipart = {
         field_type = 'text',
         m = nil,
-        convert_method = 'json',
+        convert_method = 'json_general',
     },
 }
 
@@ -132,6 +132,19 @@ _M.actions = {
             match = match,
         },
     },
+    replace = {
+        rw = 'w',
+        valid_param = {
+            column = add_column,
+            match = {
+                _bucket_id = true,
+                _scope = true,
+                _key = true,
+                _ts = true,
+            },
+        },
+        default = {crc32 = '000000000000'},
+    },
     remove = {
         rw = 'w',
         valid_param = {
@@ -156,6 +169,9 @@ _M.actions = {
         valid_param = {
             index_keys = {
                 bucket_id = false,
+                scope = false,
+                key = false,
+                ts = false,
             },
             match = match,
             extra = {

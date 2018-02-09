@@ -8,6 +8,7 @@ local model_module = require('acid.dbagent.model_module')
 local arg_util = require('acid.dbagent.arg_util')
 local upstream_util = require('acid.dbagent.upstream_util')
 local tableutil = require('acid.tableutil')
+local convertor = require('acid.dbagent.convertor')
 local repr = tableutil.repr
 
 
@@ -53,7 +54,7 @@ local function _do_api(api_ctx)
                 'failed to check argument: %s, %s', err, errmsg)
     end
 
-    local _, err, errmsg = arg_util.convert_arg(api_ctx)
+    local _, err, errmsg = convertor.convert_arg(api_ctx)
     if err ~= nil then
         return nil, 'ConvertArgumentError', string.format(
                 'failed to convert argument: %s, %s', err, errmsg)

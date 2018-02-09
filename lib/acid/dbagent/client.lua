@@ -6,15 +6,6 @@ local tableutil = require('acid.tableutil')
 
 local _M = { _VERSION = '0.0.1' }
 
-local type = type
-local pairs = pairs
-local ipairs = ipairs
-local tostring = tostring
-local setmetatable = setmetatable
-local string_format = string.format
-local table_concat = table.concat
-local table_insert = table.insert
-
 local mt = { __index = _M }
 
 
@@ -51,46 +42,53 @@ function _M.new(core_ips, port, access_key, secret_key, opts)
 end
 
 
-function _M.request_one_ip(self, core_ip, port, timeout, core2_request)
-    local http = httpclient:new(core_ip, port, timeout,
-                            {service_key = 'core'})
-    local core2_request_copy = tableutil.dup(core2_request, true)
-    core2_request_copy.headers.Host = core_ip
-    local auth_ctx, err, msg = self.signer:add_auth_v4(core2_request_copy,
-                                                       {sign_payload = true})
-    if err ~= nil then
-        return nil, err, 'failed to add auth v4: ' .. msg
+function _M.raw_request(opts)
+    if opts == nil then
+        opts = {}
     end
 
-    local _, err, msg = http:request(core2_request_copy.uri,
-                                  {method = core2_request_copy.verb,
-                                   headers = core2_request_copy.headers,
-                                   body = core2_request_copy.body})
+    local timeout = opts.timeout or 1000
+    local uri = opts.uri or string.format('/api/%s/%s',
+                                          opts.subject, opts.action)
+    local headers = opts.headers or {}
+    local body = opts.body or ''
+
+    local ip = opts.ip or '127.0.0.1'
+    local port = opts.port or 7011
+
+    local http = httpclient:new(ip, port, timeout,
+                                {service_key = 'dbagent'})
+
+    local _, err, errmsg = http:request(uri,
+                                     {method = 'POST',
+                                      headers = headers,
+                                      body = body})
     if err ~= nil then
-        return nil, err, string_format('failed to request core ip %s, %s',
-                                       core_ip, msg)
+        return nil, 'HttpRequestError', string.format(
+                'failed to request ip: %s, %s, %s', ip, err, errmsg)
     end
 
     local body = {}
     while true do
-        local buf, err, msg = http:read_body(1024*1024*10)
+        local buf, err, errmsg = http:read_body(1024*1024*10)
         if err ~= nil then
-            return nil, err, 'failed to read body: ' .. msg
+            return nil, 'ReadBodyError', string.format(
+                    'failed to read body: %s, %s', err, errmsg)
         end
 
         if buf == '' then
             break
         end
 
-        table_insert(body, buf)
+        table.insert(body, buf)
     end
 
-    local resp_body = table_concat(body)
+    local resp_body = table.concat(body)
 
     if http.status ~= 200 then
         return nil, 'InvalidResponse',
-                string_format('response from %s is invalid, code: %s, body: %s',
-                              core_ip, tostring(http.status), resp_body)
+                string.format('response from %s is invalid, code: %s, body: %s',
+                              ip, tostring(http.status), resp_body)
     end
 
      if http.headers['connection'] == 'keep-alive' then
@@ -98,6 +96,34 @@ function _M.request_one_ip(self, core_ip, port, timeout, core2_request)
      end
 
     return {body = resp_body, headers = http.headers}, nil, nil
+end
+
+
+function _M.request_one_ip(self, core_ip, port, timeout, core2_request)
+    local core2_request_copy = tableutil.dup(core2_request, true)
+    core2_request_copy.headers.Host = core_ip
+
+    local auth_ctx, err, errmsg = self.signer:add_auth_v4(
+            core2_request_copy, {sign_payload = true})
+    if err ~= nil then
+        return nil, 'AddAuthError', string.format(
+                'failed to add auth v4: %s, %s', err, errmsg)
+    end
+
+    local opts = {
+        ip = core_ip,
+        port = port,
+        timeout = timeout,
+        uri = core2_request_copy.uri,
+        headers = core2_request_copy.headers,
+        body = core2_request_copy.body
+    }
+    local resp, err, errmsg = _M.raw_request(opts)
+    if err ~= nil then
+        return nil, err, errmsg
+    end
+
+    return resp, nil, nil
 end
 
 
@@ -109,12 +135,13 @@ function _M.do_request(self, core2_request)
     local timeout_ratio = self.timeout_ratio
 
     for _, core_ip in ipairs(self.core_ips) do
-        resp, err, msg = self:request_one_ip(core_ip, port, timeout, core2_request)
+        resp, err, msg = self:request_one_ip(core_ip, port, timeout,
+                                             core2_request)
         if err == nil then
             return resp, nil, nil
         end
 
-        ngx.log(ngx.WARN, string_format(
+        ngx.log(ngx.WARN, string.format(
                 'failed to request core ip %s: %s, %s',
                 core_ip, err, msg))
 
@@ -135,15 +162,11 @@ local function parse_response_body(response_body, ignore)
     local result, err_msg = acid_json.dec(response_body)
     if err_msg ~= nil then
         return nil, 'InvalidResponse',
-                string_format('failed to decode response body: %s', err_msg)
+                string.format('failed to decode response body: %s', err_msg)
     end
 
     if result.error_code ~= nil then
         return nil, 'OperationalError', response_body
-    end
-
-    if true then
-        return result
     end
 
     result = result.value
@@ -171,7 +194,7 @@ local function load_shard(self, headers)
         if err_msg == nil then
             self.sess[s] = v
         else
-            ngx.log(ngx.ERR, string_format(
+            ngx.log(ngx.ERR, string.format(
                     'failed to decode header %s: %s', s, err_msg))
         end
     end
@@ -198,7 +221,7 @@ function _M.req(self, subject, action, params, opts)
 
     local resp, err, msg = self:do_request(core2_request)
     if err ~= nil then
-        ngx.log(ngx.ERR, string_format('failed to request core2: %s, %s',
+        ngx.log(ngx.ERR, string.format('failed to request core2: %s, %s',
                                        err, msg))
         return nil, err, msg
     end
@@ -206,7 +229,7 @@ function _M.req(self, subject, action, params, opts)
     local ignore = opts.ignore or self.ignore
     local result, err, msg = parse_response_body(resp.body, ignore)
     if err ~= nil then
-        ngx.log(ngx.ERR, string_format('failed to parse response: %s, %s',
+        ngx.log(ngx.ERR, string.format('failed to parse response: %s, %s',
                                        err, msg))
         return nil, err, msg
     end

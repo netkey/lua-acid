@@ -135,7 +135,7 @@ end
 
 
 local function build_equal_str(fields, column, args, separator)
-    if type(column) ~= 'table' then
+    if column == nil then
         return '', nil, nil
     end
 
@@ -160,7 +160,7 @@ end
 
 
 local function build_range_str(fields, range, args)
-    if type(range) ~= 'table' then
+    if range == nil then
         return '', nil, nil
     end
 
@@ -214,7 +214,7 @@ local function build_greater_than_str(fields, matched_fields, args)
             table.insert(parts, string.format(
                     '%s=%s', field.backticked_name, quoted_value))
         else
-            if args.leftopen == '1' then
+            if args.leftopen == true then
                 table.insert(parts, string.format(
                         '%s>%s', field.backticked_name, quoted_value))
             else
@@ -229,7 +229,7 @@ end
 
 
 local function build_increase_str(fields, column, args)
-    if type(column) ~= 'table' then
+    if column == nil then
         return '', nil, nil
     end
 
@@ -253,7 +253,7 @@ end
 
 
 local function build_match_str(fields, match, args)
-    if type(match) ~= 'table' then
+    if match == nil then
         return '', nil, nil
     end
 
@@ -504,7 +504,7 @@ function _M.make_add_sql(api_ctx)
 
     api_ctx.sqls = {sql}
 
-    return true, nil, nil
+    return sql, nil, nil
 end
 
 
@@ -521,7 +521,7 @@ function _M.make_set_sql(api_ctx)
 
     api_ctx.sqls = {sql}
 
-    return true, nil, nil
+    return sql, nil, nil
 end
 
 
@@ -538,7 +538,7 @@ function _M.make_increase_sql(api_ctx)
 
     api_ctx.sqls = {sql}
 
-    return true, nil, nil
+    return sql, nil, nil
 end
 
 
@@ -555,7 +555,7 @@ function _M.make_get_sql(api_ctx)
 
     api_ctx.sqls = {sql}
 
-    return true, nil, nil
+    return sql, nil, nil
 end
 
 
@@ -590,7 +590,7 @@ function _M.make_indexed_ls_sql(api_ctx)
 
     api_ctx.sqls = {sql}
 
-    return true, nil, nil
+    return sql, nil, nil
 end
 
 
@@ -636,7 +636,7 @@ function _M.make_count_sql(api_ctx)
 
     api_ctx.sqls = {sql}
 
-    return true, nil, nil
+    return sql, nil, nil
 end
 
 
@@ -653,7 +653,26 @@ function _M.make_remove_sql(api_ctx)
 
     api_ctx.sqls = {sql}
 
-    return true, nil, nil
+    return sql, nil, nil
+end
+
+
+function _M.make_replace_sql(api_ctx)
+    local remove_sql, err, errmsg = _M.make_remove_sql(api_ctx)
+    if err ~= nil then
+        return nil, 'MakeReplaceSqlError', string.format(
+                'failed to make remove sql: %s, %s', err, errmsg)
+    end
+
+    local add_sql, err, errmsg = _M.make_add_sql(api_ctx)
+    if err ~= nil then
+        return nil, 'MakeReplaceSqlError', string.format(
+                'failed to make add sql: %s, %s', err, errmsg)
+    end
+
+    api_ctx.sqls = {remove_sql, add_sql}
+
+    return {remove_sql, add_sql}, nil, nil
 end
 
 
@@ -666,6 +685,7 @@ _M.sql_maker = {
     ls = _M.make_indexed_ls_sql,
     remove = _M.make_remove_sql,
     count = _M.make_count_sql,
+    replace = _M.make_replace_sql,
 }
 
 

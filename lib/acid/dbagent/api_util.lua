@@ -1,6 +1,6 @@
 local json = require('acid.json')
 local strutil = require('acid.strutil')
-local arg_util = require('acid.dbagent.arg_util')
+local convertor = require('acid.dbagent.convertor')
 local to_str = strutil.to_str
 
 
@@ -60,7 +60,7 @@ function _M.make_resp_value(api_ctx)
         return api_ctx.result, nil, nil
     end
 
-    local _, err, errmsg = arg_util.convert_result(api_ctx)
+    local _, err, errmsg = convertor.convert_result(api_ctx)
     if err ~= nil then
         return nil, err, errmsg
     end

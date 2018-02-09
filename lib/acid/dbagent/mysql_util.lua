@@ -3,7 +3,9 @@ local upstream_util = require('acid.dbagent.upstream_util')
 local mysql = require('resty.mysql')
 local util = require('acid.dbagent.util')
 local json = require('acid.json')
-
+local tableutil = require('acid.tableutil')
+local repr = tableutil.repr
+local cjson = require('cjson')
 
 local to_str = strutil.to_str
 
@@ -15,21 +17,7 @@ local TRANSACTION_ROLLBACK = 'ROLLBACK'
 local TRANSACTION_COMMIT = 'COMMIT'
 
 
-local function close_db(db, connect_ident)
-    local ok, err = db:close()
-    if not ok then
-        ngx.log(ngx.ERR, string.format('failed to close: %s, %s',
-                                       connect_ident, err))
-    end
-end
-
-
-function _M.single_query_one_try(connection_info, sql)
-
-    -- for call back args
-    local query_ctx = {}
-
-
+function _M.connect_db(connection_info, callbacks)
     local db, err = mysql:new()
     if not db then
         return nil, 'MysqlNewError', string.format(
@@ -58,153 +46,160 @@ function _M.single_query_one_try(connection_info, sql)
                 tostring(errcode), sqlstate)
     end
 
-    local connect_ident = util.get_connect_ident_str(options.host,
-                                                options.port)
+    local ident = util.get_connect_ident_str(options.host,
+                                             options.port)
 
-    local res, err, errcode, sqlstate = db:query(sql)
+    return {db=db, ident=ident}, nil, nil
+end
+
+
+local function close_db(connect)
+    local ok, err = connect.db:close()
+    if not ok then
+        ngx.log(ngx.ERR, string.format('failed to close: %s, %s',
+                                       connect.ident, err))
+    end
+end
+
+
+function _M.db_query(connect, sql, callbacks)
+    local query_result, err, errcode, sqlstate = connect.db:query(sql)
     if err ~= nil then
-        close_db(db)
+        close_db(connect)
         return nil, 'MysqlQueryError', string.format(
                 'failed to query mysql: %s on: %s, error: %s, %s, %s',
-                sql, connect_ident, err, errcode, sqlstate)
+                sql, connect.ident, err, errcode, sqlstate)
     end
 
     ngx.log(ngx.INFO, string.format(
-            'query sql: %s, on: %s, res: %s',
-            sql, connect_ident, to_str(res)))
+            'query sql: %s, on: %s, query result: %s',
+            sql, connect.ident, to_str(query_result)))
 
-    local ok, err = db:set_keepalive(10 * 1000, 100)
-    if not ok then
-        ngx.log(ngx.ERR, string.format(
-                'failed to set mysql keepalive on: %s, %s', err))
-    end
-
-    return res, nil, nil
+    return query_result, nil, nil
 end
 
 
-local function roll_back(db, connect_ident)
-    local res, err, errcode, sqlstate = db:query(TRANSACTION_ROLLBACK)
+function _M.single_query_one_try(connection_info, sql, callbacks)
+    local connect, err, errmsg = _M.connect_db(connection_info, callbacks)
+    if err ~= nil then
+        return nil, err, errmsg
+    end
+
+    local query_result, err, errmsg = _M.db_query(connect, sql, callbacks)
+    if err ~= nil then
+        return nil, err, errmsg
+    end
+
+    local ok, err = connect.db:set_keepalive(10 * 1000, 100)
+    if not ok then
+        ngx.log(ngx.ERR, string.format(
+                'failed to set mysql keepalive on: %s, %s',
+                connect.ident, err))
+    end
+
+    return query_result, nil, nil
+end
+
+
+local function roll_back(connect, callbacks)
+    local query_result, err, errmsg = _M.db_query(
+            connect, TRANSACTION_ROLLBACK, callbacks)
     if err ~= nil then
         ngx.log(ngx.INFO, string.format(
-                'failed to roll back on: %s, error: %s, %s, %s',
-                connect_ident, err, errcode, sqlstate))
+                'failed to roll back on: %s, %s, %s',
+                connect.ident, err, errmsg))
     end
-    ngx.log(ngx.INFO, string.format('roll back on: %s, res: %s',
-                                    connect_ident, to_str(res)))
-
+    ngx.log(ngx.INFO, string.format('roll back on: %s, result: %s',
+                                    connect.ident, to_str(query_result)))
 end
 
 
-local function transaction_query_one_try(connection_info, sqls)
-    -- for call back args
-    local query_ctx = {}
-
-    local db, err = mysql:new()
-    if not db then
-        return nil, 'MysqlNewError', string.format(
-                'failed to new mysql: %s', err)
+local function transaction_query_one_try(connection_info,
+                                         sqls, sqls_opts, callbacks)
+    if sqls_opts == nil then
+        sqls_opts = {}
     end
 
-    db:set_timeout(1000) -- 1 second
-
-    local options = {
-        host = connection_info.host,
-        port = connection_info.port,
-        database = connection_info.database,
-        user = connection_info.user,
-        password = connection_info.password,
-
-        -- use default
-        charset = nil,
-        max_packet_size = nil,
-        ssl_verify = nil,
-    }
-    local connect_ident = util.get_connect_ident_str(options.host,
-                                                     options.port)
-
-    local ok, err, errcode, sqlstate = db:connect(options)
-    if not ok then
-        return nil, 'MysqlConnectError', string.format(
-                'failed to connect to: %s, error: %s, %s, %s',
-                connect_ident, err, errcode, sqlstate)
-    end
-
-    local res, err, errcode, sqlstate = db:query(TRANSACTION_START)
+    local connect, err, errmsg = _M.connect_db(connection_info, callbacks)
     if err ~= nil then
-        close_db()
-        return nil, 'MysqlQueryError', string.format(
-                'failed to start transaction on: %s, error: %s, %s, %s',
-                connect_ident, err, errcode, sqlstate)
+        return nil, err, errmsg
     end
-    ngx.log(ngx.INFO, string.format('start transaction on: %s, res: %s',
-                                    connect_ident, to_str(res)))
 
-    local transaction_res
+    local query_result, err, errmsg = _M.db_query(connect,
+                                                  TRANSACTION_START, callbacks)
+    if err ~= nil then
+        return nil, 'StartTransactionError', string.format(
+                'failed to start transaction: %s, %s', err, errmsg)
+    end
 
-    for _, sql in ipairs(sqls) do
-        local res, err, errcode, sqlstate = db:query(sql)
+    ngx.log(ngx.INFO, string.format('start transaction on: %s, result: %s',
+                                    connect.ident, to_str(query_result)))
+
+    local transaction_result = {}
+
+    for i, sql in ipairs(sqls) do
+        local query_result, err, errmsg = _M.db_query(connect, sql, callbacks)
         if err ~= nil then
-            roll_back(db, connect_ident)
-            close_db(db, connect_ident)
-            return nil, 'MysqlQueryError', string.format(
-                    'failed to execute sql: %s on: %s, error: %s, %s, %s',
-                    sql, connect_ident, err, errcode, sqlstate)
+            return nil, err, errmsg
         end
 
-        ngx.log(ngx.INFO, string.format('execute sql: %s on: %s, res: %s',
-                                        sql, connect_ident, err))
+        table.insert(transaction_result, query_result)
+        ngx.log(ngx.INFO, string.format('execute sql: %s on: %s, result: %s',
+                                        sql, connect.ident, query_result))
 
-        -- to do
-        local allow_empty_write = false
+        local sql_opts = sqls_opts[i] or {}
 
-        if not allow_empty_write then
-            if res.affected_rows == 0 then
-                roll_back(db, connect_ident)
-                close_db(db, connect_ident)
+        if not sql_opts.allow_empty_write then
+            if query_result.affected_rows == 0 then
+                roll_back(connect, callbacks)
+                close_db(connect)
 
-                return res, nil, nil
+                return nil, 'EmptyWriteError', string.format(
+                        'execute of sql: %s affected 0 row', sql)
             end
         end
-
-        transaction_res = res
     end
 
-    local res, err, errcode, sqlstate = db:query(TRANSACTION_COMMIT)
+    local query_result, err, errmsg = _M.db_query(
+            connect, TRANSACTION_COMMIT, callbacks)
     if err ~= nil then
-        roll_back(db, connect_ident)
-        close_db(db, connect_ident)
-        return nil, 'MysqlCommitError', string.format(
-                'failed to commit on: %s, error: %s, %s, %s',
-                connect_ident, err, errcode, sqlstate)
+        roll_back(connect, callbacks)
+        close_db(connect)
+        return nil, 'CommitTransactionError', string.format(
+                'failed to commit transaction: %s, %s', err, errmsg)
     end
 
-    local ok, err = db:set_keepalive(10 * 1000, 100)
+    ngx.log(ngx.INFO, string.format('commited transaction on: %s, result: %s',
+                                    connect.ident, to_str(query_result)))
+
+    local ok, err = connect.db:set_keepalive(10 * 1000, 100)
     if not ok then
         ngx.log(ngx.ERR, string.format(
-                'failed to set mysql keepalive on: %s, %s', err))
+                'failed to set mysql keepalive on: %s, %s',
+                connect.ident, err))
     end
 
-    return transaction_res, nil, nil
+    return transaction_result[#transaction_result], nil, nil
 end
 
 
-local function mysql_query(api_ctx)
+local function mysql_query(api_ctx, callbacks)
     api_ctx.tried_connections = {}
 
     local query_result, err, errmsg
 
-    for i = 1, 3 do
+    for _ = 1, 1 do
         local connection_name = upstream_util.get_connection(api_ctx)
         local db_connetctions = api_ctx.conf.connections
         local connection_info = db_connetctions[connection_name]
 
         if #api_ctx.sqls == 1 then
             query_result, err, errmsg = _M.single_query_one_try(
-                    connection_info, api_ctx.sqls[1])
+                    connection_info, api_ctx.sqls[1], callbacks)
         else
             query_result, err, errmsg = transaction_query_one_try(
-                    connection_info, api_ctx.sqls)
+                    connection_info, api_ctx.sqls,
+                    api_ctx.sqls_opts, callbacks)
         end
 
         table.insert(api_ctx.tried_connections, {
@@ -223,9 +218,18 @@ local function mysql_query(api_ctx)
 end
 
 
-function _M.do_query(api_ctx)
-    local query_result, err, errmsg = mysql_query(api_ctx)
-    ngx.log(ngx.ERR, 'test-------------' .. to_str({query_result, 'error:', err, errmsg}))
+function _M.do_query(api_ctx, callbacks)
+    local query_result, err, errmsg = mysql_query(api_ctx, callbacks)
+    ngx.log(ngx.ERR, 'test------quuery result-------' .. repr(
+            {query_result, 'error:', err, errmsg}))
+    --ngx.log(ngx.ERR, 'test----------' .. tostring(
+            --(query_result[1] or {}).multipart))
+    --ngx.log(ngx.ERR, 'test----------' .. tostring(
+            --(query_result[1] or {}).multipart == cjson.null))
+    --ngx.log(ngx.ERR, 'test----------' .. tostring(
+            --ngx.null == cjson.null))
+
+
     if err ~= nil then
         return nil, err, errmsg
     end

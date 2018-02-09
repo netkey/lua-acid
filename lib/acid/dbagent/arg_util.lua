@@ -177,7 +177,7 @@ function _M.check(api_ctx)
     local subject_model = api_ctx.subject_model
     local action_model = api_ctx.action_model
 
-    ngx.log(ngx.ERR, 'test------------' .. repr(api_ctx.subject_model.fields))
+    --ngx.log(ngx.ERR, 'test------------' .. repr(api_ctx.subject_model.fields))
 
     local _, err, errmsg = schema_check(args, subject_model)
     if err ~= nil then
@@ -187,72 +187,6 @@ function _M.check(api_ctx)
     local _, err, errmsg = shape_check(args, action_model)
     if err ~= nil then
         return nil, err, errmsg
-    end
-
-    return true, nil, nil
-end
-
-
-local convert_methods = {
-    json = {
-        encode = json.enc,
-        decode = json.dec,
-    },
-}
-
-
-function _M.convert_arg(api_ctx)
-    local args = api_ctx.args
-    local fields = api_ctx.subject_model.fields
-
-    for arg_name, arg_value in pairs(args) do
-        local convert_method = (fields[arg_name] or {}).convert_method
-
-        if convert_method ~= nil then
-            local encode_func = convert_methods[convert_method].encode
-            local converted_value, err, errmsg = encode_func(arg_value)
-            if err ~= nil then
-                return nil, err, errmsg
-            end
-            args[arg_name] = converted_value
-        end
-    end
-
-    return true, nil, nil
-end
-
-
-local function decode_all_record(records, field_name, decode_func)
-    for _, record in ipairs(records) do
-        local origin_value = record[field_name]
-
-        local decoded_value, err, errmsg = decode_func(origin_value)
-        if err ~= nil then
-            return nil, 'ConvertResultError', string.format(
-                    'failed to decode field: %s, with value: %s, %s, %s',
-                    field_name, tostring(origin_value), err, errmsg)
-        end
-        record[field_name] = decoded_value
-    end
-end
-
-
-function _M.convert_result(api_ctx)
-    local result = api_ctx.result
-    local fields = api_ctx.subject_model.fields
-    local select_column = api_ctx.action_model.select_column
-
-    for _, field_name in ipairs(select_column) do
-        local convert_method = fields[field_name].convert_method
-        if convert_method ~= nil then
-            local decode_func = convert_methods[convert_method].decode
-
-            local _, err, errmsg = decode_all_record(
-                    result, field_name, decode_func)
-            if err ~= nil then
-                return nil, err, errmsg
-            end
-        end
     end
 
     return true, nil, nil

@@ -4,6 +4,7 @@ local tableutil = require('acid.tableutil')
 local strutil = require('acid.strutil')
 local to_str = strutil.to_str
 --local throttle = require('dbagent.throttle')
+local repr = tableutil.repr
 
 local _M = {}
 
@@ -17,12 +18,19 @@ local function get_shard(conf, subject, shard_fields_value)
     local shards = conf.tables[subject]
 
     if shards == nil then
-        return nil, 'SubjectNotFound', string.format(
-                'subject: %s not found in conf', subject)
+        return nil, 'NotShardError', string.format(
+                'shard not found in conf for subject: %s', subject)
     end
 
     local _, index = bisect.search(shards, shard_fields_value,
                                    {cmp=cmp_shard})
+
+    if index < 1 or index > #shards then
+        return nil, 'ShardIndexErrr', string.format(
+                'get invalid shard index: %d, with: %s',
+                index, repr({shards, shard_fields_value}))
+    end
+
     return {
         curr_shard = shards[index],
         next_shard = shards[index + 1],
