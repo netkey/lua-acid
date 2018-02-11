@@ -88,12 +88,18 @@ local function _do_api(api_ctx)
 end
 
 
-function _M.do_api()
+function _M.do_api(opts)
+    if opts == nil then
+        opts = {}
+    end
+
     ngx.ctx.api = {
         start_time = util.now(),
     }
 
     local api_ctx = ngx.ctx.api
+
+    api_ctx.opts = opts
 
     local resp
 
@@ -103,8 +109,6 @@ function _M.do_api()
     else
         resp = {value = resp_value}
     end
-
-    ngx.log(ngx.ERR, 'test---------' .. repr({resp_value, err, errmsg}))
 
     api_util.output_json(resp)
 end

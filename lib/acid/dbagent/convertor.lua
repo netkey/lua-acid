@@ -131,7 +131,7 @@ end
 
 
 function _M.convert_result(api_ctx)
-    local result = api_ctx.result
+    local query_result = api_ctx.query_result
     local fields = api_ctx.subject_model.fields
     local select_column = api_ctx.action_model.select_column
 
@@ -141,7 +141,7 @@ function _M.convert_result(api_ctx)
             local decode_func = convert_methods[convert_method].decode
 
             local _, err, errmsg = decode_all_record(
-                    result, field_name, decode_func)
+                    query_result, field_name, decode_func)
             if err ~= nil then
                 return nil, err, errmsg
             end

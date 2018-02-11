@@ -54,10 +54,9 @@ end
 
 
 function _M.make_resp_value(api_ctx)
-    ngx.log(ngx.ERR, 'test-------------' .. to_str(api_ctx.result))
     local select_column = api_ctx.action_model.select_column
     if select_column == nil then
-        return api_ctx.result, nil, nil
+        return api_ctx.query_result, nil, nil
     end
 
     local _, err, errmsg = convertor.convert_result(api_ctx)
@@ -65,7 +64,7 @@ function _M.make_resp_value(api_ctx)
         return nil, err, errmsg
     end
 
-    local resp_value = api_ctx.result
+    local resp_value = api_ctx.query_result
     if api_ctx.action_model.unpack_list == true then
         resp_value = resp_value[1]
     end

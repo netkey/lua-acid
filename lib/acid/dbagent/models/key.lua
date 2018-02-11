@@ -168,16 +168,19 @@ _M.actions = {
         },
         valid_param = {
             index_keys = {
-                bucket_id = false,
-                scope = false,
-                key = false,
-                ts = false,
+                bucket_id = true,
+                scope = true,
+                key = true,
+                ts = true,
             },
             match = match,
             extra = {
                 leftopen = false,
                 nlimit = false,
             },
+        },
+        query_opts = {
+            timeout = 3000,
         },
         select_column = tableutil.keys(_M.fields),
     },

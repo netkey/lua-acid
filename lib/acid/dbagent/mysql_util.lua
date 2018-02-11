@@ -38,12 +38,29 @@ function _M.connect_db(connection_info, callbacks)
         max_packet_size = nil,
         ssl_verify = nil,
     }
+
+    if callbacks.before_connect_db ~= nil then
+        callbacks.before_connect(connection_info)
+    end
+
     local ok, err, errcode, sqlstate = db:connect(options)
+
+    if callbacks.after_connect_db ~= nil then
+        callbacks.after_connect_db(connection_info)
+    end
+
     if not ok then
-        return nil, 'MysqlConnectError', string.format(
+        local error_code = 'MysqlConnectError'
+        local error_message = string.format(
                 'failed to connect to: %s, %s, %s, %s, %s',
                 options.host, tostring(options.port), err,
                 tostring(errcode), sqlstate)
+
+        if callbacks.connect_db_error ~= nil then
+            callbacks.connect_db_error(error_code, error_message)
+        end
+
+        return nil, error_code, error_message
     end
 
     local ident = util.get_connect_ident_str(options.host,
@@ -63,12 +80,29 @@ end
 
 
 function _M.db_query(connect, sql, callbacks)
+    if callbacks.before_query_db ~= nil then
+        callbacks.before_query_db(sql)
+    end
+
     local query_result, err, errcode, sqlstate = connect.db:query(sql)
+
+    if callbacks.after_query_db ~= nil then
+        callbacks.after_query_db(query_result)
+    end
+
     if err ~= nil then
         close_db(connect)
-        return nil, 'MysqlQueryError', string.format(
+
+        local error_code = 'MysqlQueryError'
+        local error_message = string.format(
                 'failed to query mysql: %s on: %s, error: %s, %s, %s',
                 sql, connect.ident, err, errcode, sqlstate)
+
+        if callbacks.query_db_error ~= nil then
+            callbacks.query_db_error(error_code, error_message)
+        end
+
+        return nil, error_code, error_message
     end
 
     ngx.log(ngx.INFO, string.format(
@@ -188,7 +222,7 @@ local function mysql_query(api_ctx, callbacks)
 
     local query_result, err, errmsg
 
-    for _ = 1, 1 do
+    for _ = 1, 3 do
         local connection_name = upstream_util.get_connection(api_ctx)
         local db_connetctions = api_ctx.conf.connections
         local connection_info = db_connetctions[connection_name]
@@ -218,23 +252,14 @@ local function mysql_query(api_ctx, callbacks)
 end
 
 
-function _M.do_query(api_ctx, callbacks)
+function _M.do_query(api_ctx)
+    local callbacks = api_ctx.opts.callbacks or {}
     local query_result, err, errmsg = mysql_query(api_ctx, callbacks)
-    ngx.log(ngx.ERR, 'test------quuery result-------' .. repr(
-            {query_result, 'error:', err, errmsg}))
-    --ngx.log(ngx.ERR, 'test----------' .. tostring(
-            --(query_result[1] or {}).multipart))
-    --ngx.log(ngx.ERR, 'test----------' .. tostring(
-            --(query_result[1] or {}).multipart == cjson.null))
-    --ngx.log(ngx.ERR, 'test----------' .. tostring(
-            --ngx.null == cjson.null))
-
-
     if err ~= nil then
         return nil, err, errmsg
     end
 
-    api_ctx.result = query_result
+    api_ctx.query_result = query_result
     return query_result, nil, nil
 end
 
