@@ -9,23 +9,9 @@ _M.fields = {
         field_type = 'bigint',
         m = 20,
     },
-    scope = {
-        field_type = 'varbinary',
-        m = 4,
-        no_hex = true,
-    },
-    key = {
-        field_type = 'varbinary',
-        m = 512,
-        no_hex = true,
-    },
-    ts = {
-        field_type = 'bigint',
-        m = 20,
-    },
-    is_del = {
-        field_type = 'tinyint',
-        m = 4,
+    bucket= {
+        field_type = 'varchar',
+        m = 255,
     },
     owner = {
         field_type = 'varchar',
@@ -36,64 +22,107 @@ _M.fields = {
         m = nil,
         convert_method = 'json_acl',
     },
-    sha1 = {
-        field_type = 'binary',
-        m = 20,
-    },
-    ver = {
+    redirect = {
         field_type = 'bigint',
         m = 20,
     },
-    md5 = {
-        field_type = 'binary',
-        m = 16,
-    },
-    crc32 = {
-        field_type = 'binary',
+    relax_upload = {
+        field_type = 'tinyint',
         m = 4,
     },
-    size = {
-        field_type = 'bigint',
-        m = 20,
-        no_string = true,
-    },
-    file_meta = {
-        field_type = 'text',
-        m = nil,
-        convert_method = 'json_null_or_empty_to_table',
-    },
-    group_id = {
-        field_type = 'bigint',
-        m = 20,
-    },
-    origo = {
-        field_type = 'binary',
-        m = 6,
-    },
-    expires = {
-        field_type = 'bigint',
-        m = 20,
-    },
-    multipart = {
+    cors = {
         field_type = 'text',
         m = nil,
         convert_method = 'json_general',
     },
+    conf = {
+        field_type = 'text',
+        m = nil,
+        convert_method = 'json_general',
+    },
+    serversidekey = {
+        field_type = 'text',
+        m = nil,
+        convert_method = 'json_general',
+    },
+    ts = {
+        field_type = 'bigint',
+        m = 20,
+    },
+    is_del = {
+        field_type = 'tinyint',
+        m = 4,
+    },
+    space_used = {
+        field_type = 'bigint',
+        m = 20,
+    },
+    num_used = {
+        field_type = 'bigint',
+        m = 20,
+    },
+    space_up = {
+        field_type = 'bigint',
+        m = 20,
+    },
+    num_up = {
+        field_type = 'bigint',
+        m = 20,
+    },
+    space_down = {
+        field_type = 'bigint',
+        m = 20,
+    },
+    num_down = {
+        field_type = 'bigint',
+        m = 20,
+    },
 }
 
+_M.shard_fields = {}
 
-_M.shard_fields = {
-    'bucket_id',
-    'scope',
-    'key',
+
+local add_column = {
+    bucket_id = true,
+    bucket = true,
+    owner = true,
+    acl = false,
+    redirect = false,
+    relax_upload = false,
+    cors = false,
+    conf = false,
+    serversidekey = false,
+    ts = true,
+    is_del = false,
+    space_used = false,
+    num_used = false,
+    space_up = false,
+    num_up = false,
+    space_down = false,
+    num_down = false,
 }
 
+local link_column = tableutil.dup(add_column, true)
+link_column.redirect = true
 
-local add_column = {}
-for field_name, _ in pairs(_M.fields) do
-    add_column[field_name] = true
-end
-add_column.multipart = false
+local add_default = {
+    acl = {},
+    redirect = 0,
+    relax_upload = 1,
+    cors = {},
+    conf = {},
+    serversidekey = {},
+    is_del = 0,
+    space_used = 0,
+    num_used = 0,
+    space_up = 0,
+    num_up = 0,
+    space_down = 0,
+    num_down = 0,
+}
+
+local link_default = tableutil.dup(add_default, true)
+link_default.redirect = nil
 
 local ident = {
     bucket_id = true,
@@ -118,35 +147,26 @@ _M.actions = {
         valid_param = {
             column = add_column,
         },
-        default = {crc32 = '000000000000'},
+        default = add_default,
+    },
+    link = {
+        rw = 'w',
+        sql_type = 'add',
+        valid_param = {
+            column = link_column,
+        },
+        default = link_default,
     },
     set = {
         rw = 'w',
         sql_type = 'set',
         valid_param = {
-            column = {
-                acl = false,
-                file_meta = false,
-                expires = false,
-                multipart = false,
+            ident = {
+                bucket_id = true,
             },
-            ident = ident,
-            match = match,
+
         },
-    },
-    replace = {
-        rw = 'w',
-        sql_type = 'replace',
-        valid_param = {
-            column = add_column,
-            match = {
-                _bucket_id = true,
-                _scope = true,
-                _key = true,
-                _ts = true,
-            },
-        },
-        default = {crc32 = '000000000000'},
+        default = link_default,
     },
     remove = {
         rw = 'w',
@@ -158,7 +178,6 @@ _M.actions = {
     },
     get = {
         rw = 'r',
-        sql_type = 'get',
         valid_param = {
             ident = ident,
             match = match,
@@ -168,7 +187,6 @@ _M.actions = {
     },
     ls = {
         rw = 'r',
-        sql_type = 'indexed_ls',
         indexes = {
             idx_bucket_id_scope_key_ts = {
                 'bucket_id', 'scope', 'key', 'ts',

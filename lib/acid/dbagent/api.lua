@@ -1,6 +1,5 @@
 local util = require('acid.dbagent.util')
 --local statistic = require('acid.dbagent.statistic')
-local author = require('acid.dbagent.author')
 local api_util = require('acid.dbagent.api_util')
 local sql_util = require('acid.dbagent.sql_util')
 local mysql_util = require('acid.dbagent.mysql_util')
@@ -16,20 +15,6 @@ local _M = {}
 
 
 local function _do_api(api_ctx)
-    local now, err, errmsg = util.now()
-    if err ~= nil then
-        return 'InternalError', string.format(
-                'failed to get time: %s, %s', err, errmsg)
-    end
-    api_ctx.start_time = now
-
-    --local auth_info, err, errmsg = author.do_auth()
-    --if err ~= nil then
-        --return nil, err, errmsg
-    --end
-    --api_ctx.auth_info = auth_info
-
-
     local _, err, errmsg = api_util.extract_request_info(api_ctx)
     if err ~= nil then
         return nil, 'ExtractError', string.format(

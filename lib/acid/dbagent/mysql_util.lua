@@ -17,14 +17,14 @@ local TRANSACTION_ROLLBACK = 'ROLLBACK'
 local TRANSACTION_COMMIT = 'COMMIT'
 
 
-function _M.connect_db(connection_info, callbacks)
+function _M.connect_db(connection_info, callbacks, query_opts)
     local db, err = mysql:new()
     if not db then
         return nil, 'MysqlNewError', string.format(
                 'failed to new mysql: %s', err)
     end
 
-    db:set_timeout(1000) -- 1 second
+    db:set_timeout(query_opts.timeout or 1000) -- default 1 second
 
     local options = {
         host = connection_info.host,
@@ -113,8 +113,8 @@ function _M.db_query(connect, sql, callbacks)
 end
 
 
-function _M.single_query_one_try(connection_info, sql, callbacks)
-    local connect, err, errmsg = _M.connect_db(connection_info, callbacks)
+function _M.single_query_one_try(connection_info, sql, callbacks, query_opts)
+    local connect, err, errmsg = _M.connect_db(connection_info, callbacks, query_opts)
     if err ~= nil then
         return nil, err, errmsg
     end
@@ -148,13 +148,13 @@ local function roll_back(connect, callbacks)
 end
 
 
-local function transaction_query_one_try(connection_info,
-                                         sqls, sqls_opts, callbacks)
+local function transaction_query_one_try(connection_info, sqls, sqls_opts,
+                                         callbacks, query_opts)
     if sqls_opts == nil then
         sqls_opts = {}
     end
 
-    local connect, err, errmsg = _M.connect_db(connection_info, callbacks)
+    local connect, err, errmsg = _M.connect_db(connection_info, callbacks, query_opts)
     if err ~= nil then
         return nil, err, errmsg
     end
@@ -218,30 +218,23 @@ end
 
 
 local function mysql_query(api_ctx, callbacks)
-    api_ctx.tried_connections = {}
-
     local query_result, err, errmsg
+    local db_connetctions = api_ctx.conf.connections
+
+    local query_opts = api_ctx.action_model.query_opts or {}
 
     for _ = 1, 3 do
         local connection_name = upstream_util.get_connection(api_ctx)
-        local db_connetctions = api_ctx.conf.connections
         local connection_info = db_connetctions[connection_name]
 
         if #api_ctx.sqls == 1 then
             query_result, err, errmsg = _M.single_query_one_try(
-                    connection_info, api_ctx.sqls[1], callbacks)
+                    connection_info, api_ctx.sqls[1], callbacks, query_opts)
         else
             query_result, err, errmsg = transaction_query_one_try(
                     connection_info, api_ctx.sqls,
-                    api_ctx.sqls_opts, callbacks)
+                    api_ctx.sqls_opts, callbacks, query_opts)
         end
-
-        table.insert(api_ctx.tried_connections, {
-            connection_name = connection_name,
-            query_result = query_result,
-            error_code = err,
-            error_message = errmsg,
-        })
 
         if err == nil then
             return query_result, nil, nil

@@ -403,15 +403,15 @@ local function build_select_as_str(fields, select_column)
 end
 
 
-local function build_force_index(all_index, args)
-    local index_to_use = {}
+local function build_force_index(indexes, args)
+    local index_to_use
     local longest_match_n = 0
 
-    for _, index in ipairs(all_index) do
+    for index_name, index_columns in pairs(indexes) do
         local match_n = 0
 
-        for _, field_name in ipairs(index) do
-            if args[field_name] ~= nil then
+        for _, column_name in ipairs(index_columns) do
+            if args[column_name] ~= nil then
                 match_n = match_n + 1
             else
                 break
@@ -420,23 +420,18 @@ local function build_force_index(all_index, args)
 
         if match_n >= longest_match_n then
             longest_match_n = match_n
-            index_to_use = index
+            index_to_use = index_name
         end
     end
 
-    if #index_to_use == 0 then
+    if index_to_use == nil then
         return {force_index_str='', matched_fields={}}
     end
 
-    local index_name = 'idx_' .. table.concat(index_to_use, '_')
-
-    local matched_fields = {}
-    for i = 1, longest_match_n do
-        table.insert(matched_fields, index_to_use[i])
-    end
+    local matched_fields = {unpack(indexes[index_to_use], 1, longest_match_n)}
 
     return {
-        force_index_str = string.format(' FORCE INDEX (%s)', index_name),
+        force_index_str = string.format(' FORCE INDEX (%s)', index_to_use),
         matched_fields = matched_fields,
     }
 end
@@ -562,14 +557,14 @@ end
 function _M.make_indexed_ls_sql(api_ctx)
     local nlimit = api_ctx.args.nlimit or 1
     local fields = api_ctx.subject_model.fields
-    local all_index = api_ctx.action_model.all_index
+    local indexes = api_ctx.action_model.indexes
     local args = api_ctx.args
 
     local opts = {
         limit = nlimit,
     }
 
-    local force_index = build_force_index(all_index, args)
+    local force_index = build_force_index(indexes, args)
     if force_index.force_index_str ~= '' then
         local greater_than_str = build_greater_than_str(
                 fields, force_index.matched_fields, args)
@@ -690,7 +685,8 @@ _M.sql_maker = {
 
 
 function _M.make_sqls(api_ctx)
-    local sql_maker_func = _M.sql_maker[api_ctx.action]
+    local sql_type = api_ctx.action_model.sql_type
+    local sql_maker_func = _M.sql_maker[sql_type]
 
     if sql_maker_func == nil then
         ngx.log(ngx.ERR, string.format(
