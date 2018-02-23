@@ -357,8 +357,7 @@ that field.
 
 #### valid_param.ident
 
-The fields that can uniquely identify a record in a database table,
-if used to operate on a specific record.
+The fields are used to identify the records that you are insterested in.
 
 #### valid_para.match
 
