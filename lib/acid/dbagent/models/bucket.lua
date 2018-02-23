@@ -77,6 +77,14 @@ _M.fields = {
         field_type = 'bigint',
         m = 20,
     },
+    space_del = {
+        field_type = 'bigint',
+        m = 20,
+    },
+    num_del = {
+        field_type = 'bigint',
+        m = 20,
+    },
 }
 
 _M.shard_fields = {}
@@ -126,18 +134,6 @@ link_default.redirect = nil
 
 local ident = {
     bucket_id = true,
-    scope = true,
-    key = true,
-    ts = false,
-}
-
-local match = {
-    _sha1=false,
-    _ver=false,
-	_size=false,
-	_ts=false,
-	_group_id=false,
-	_is_del=false,
 }
 
 _M.actions = {
@@ -161,35 +157,101 @@ _M.actions = {
         rw = 'w',
         sql_type = 'set',
         valid_param = {
-            ident = {
-                bucket_id = true,
-            },
+            column = {
+                owner = false,
+                acl = false,
+                relax_upload = false,
+                is_del = false,
+                cors = false,
+                conf = false,
+                serversidekey = false,
+                ts = false,
 
+            },
+            ident = ident,
         },
-        default = link_default,
+    },
+    incr = {
+        rw = 'w',
+        sql_type = 'incr',
+        valid_param = {
+            column = {
+                space_used = false,
+                num_used = false,
+                space_up = false,
+                num_up = false,
+                space_down = false,
+                num_down = false,
+                space_del = false,
+                num_del = false,
+            },
+            ident = ident,
+        },
+    },
+    markdel = {
+        rw = 'w',
+        sql_type = 'set',
+        valid_param = {
+            column = {
+                is_del = false,
+            },
+            ident = ident,
+        },
+        default = { is_del = 1 },
+    },
+    undel = {
+        rw = 'w',
+        sql_type = 'set',
+        valid_param = {
+            column = {
+                is_del = false,
+            },
+            ident = ident,
+        },
+        default = { is_del = 0 },
     },
     remove = {
         rw = 'w',
         sql_type = 'remove',
         valid_param = {
             ident = ident,
-            match = match,
         },
     },
     get = {
         rw = 'r',
+        sql_type = 'get',
+        valid_param = {
+            ident = {
+                bucket = true,
+            },
+            match = {
+                _is_del = false,
+            },
+        },
+        default = { is_del = 0 },
+        unpack_list = true,
+        select_column = tableutil.keys(_M.fields),
+    },
+    getbyid = {
+        rw = 'r',
+        sql_type = 'get',
         valid_param = {
             ident = ident,
-            match = match,
         },
-        select_column = tableutil.keys(_M.fields),
         unpack_list = true,
+        select_column = tableutil.keys(_M.fields),
     },
     ls = {
         rw = 'r',
         indexes = {
-            idx_bucket_id_scope_key_ts = {
-                'bucket_id', 'scope', 'key', 'ts',
+            idx_bucket_id = {
+                'bucket_id',
+            },
+            idx_bucket = {
+                'bucket',
+            },
+            idx_owner_bucket = {
+                'owner', 'bucket',
             },
             PRIMARY = {
                 '_id',
@@ -198,17 +260,20 @@ _M.actions = {
         valid_param = {
             index_columns = {
                 bucket_id = false,
-                scope = false,
-                key = false,
-                ts = false,
+                bucket = false,
+                owner = false,
                 _id = false,
             },
-            match = match,
+            match = {
+                _is_del = false,
+                _redirect = false,
+            },
             extra = {
                 leftopen = false,
                 nlimit = false,
             },
         },
+        default = { nlimit = 1024 * 1024 },
         query_opts = {
             timeout = 3000,
         },

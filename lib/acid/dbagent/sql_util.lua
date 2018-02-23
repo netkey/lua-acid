@@ -554,6 +554,23 @@ function _M.make_get_sql(api_ctx)
 end
 
 
+function _M.make_get_multi_sql(api_ctx)
+    local sql, err, errmsg = build_select_sql(
+            api_ctx.upstream.table_name,
+            api_ctx.subject_model.fields,
+            api_ctx.action_model,
+            api_ctx.args,
+            {})
+    if err ~= nil then
+        return nil, err, errmsg
+    end
+
+    api_ctx.sqls = {sql}
+
+    return sql, nil, nil
+end
+
+
 function _M.make_indexed_ls_sql(api_ctx)
     local nlimit = api_ctx.args.nlimit or 1
     local fields = api_ctx.subject_model.fields
@@ -676,6 +693,7 @@ _M.sql_maker = {
     set = _M.make_set_sql,
     increase = _M.make_increase_sql,
     get = _M.make_get_sql,
+    get_multi = _M.make_get_multi_sql,
     indexed_ls = _M.make_indexed_ls_sql,
     ls = _M.make_indexed_ls_sql,
     remove = _M.make_remove_sql,

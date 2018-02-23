@@ -94,6 +94,7 @@ for field_name, _ in pairs(_M.fields) do
     add_column[field_name] = true
 end
 add_column.multipart = false
+add_column.crc32 = false
 
 local ident = {
     bucket_id = true,

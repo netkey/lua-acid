@@ -31,6 +31,16 @@ local function general_json_decode(data, opts)
 end
 
 
+local function null_to_table_json_decode(data)
+    return general_json_decode(data, {null_to={}})
+end
+
+
+local function null_or_empty_to_null_json_decode(data)
+    return general_json_decode(data, {null_to=ngx.null, empty_to=ngx.null})
+end
+
+
 local function null_or_empty_to_table_json_decode(data)
     return general_json_decode(data, {null_to={}, empty_to={}})
 end
@@ -82,6 +92,14 @@ local convert_methods = {
     json_general = {
         encode = json.enc,
         decode = general_json_decode,
+    },
+    json_null_to_table = {
+        encode = json.enc,
+        decode = null_to_table_json_decode,
+    },
+    json_null_or_empty_to_null = {
+        encode = json.enc,
+        decode = null_or_empty_to_null_json_decode,
     },
     json_null_or_empty_to_table = {
         encode = json.enc,
