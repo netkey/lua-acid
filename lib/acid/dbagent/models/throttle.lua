@@ -77,6 +77,7 @@ _M.actions = {
     },
     ls = {
         rw = 'r',
+        sql_type = 'indexed_ls',
         indexes = {
             idx_service_username = {
                 'service', 'username',

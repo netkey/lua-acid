@@ -223,9 +223,7 @@ _M.actions = {
         valid_param = {
             ident = {
                 bucket = true,
-            },
-            match = {
-                _is_del = false,
+                is_del = false,
             },
         },
         default = { is_del = 0 },
@@ -243,6 +241,7 @@ _M.actions = {
     },
     ls = {
         rw = 'r',
+        sql_type = 'indexed_ls',
         indexes = {
             idx_bucket_id = {
                 'bucket_id',
@@ -250,8 +249,8 @@ _M.actions = {
             idx_bucket = {
                 'bucket',
             },
-            idx_owner_bucket = {
-                'owner', 'bucket',
+            idx_owner_bucket_id = {
+                'owner', 'bucket_id',
             },
             PRIMARY = {
                 '_id',

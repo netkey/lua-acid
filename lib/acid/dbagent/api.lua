@@ -5,6 +5,7 @@ local sql_util = require('acid.dbagent.sql_util')
 local mysql_util = require('acid.dbagent.mysql_util')
 local model_module = require('acid.dbagent.model_module')
 local arg_util = require('acid.dbagent.arg_util')
+local json = require('acid.json')
 local upstream_util = require('acid.dbagent.upstream_util')
 local tableutil = require('acid.tableutil')
 local convertor = require('acid.dbagent.convertor')
@@ -12,6 +13,12 @@ local repr = tableutil.repr
 
 
 local _M = {}
+
+
+local function set_shard_header(api_ctx)
+    ngx.header[ 'X-S2-shard-current' ] = json.enc(api_ctx.curr_shard.from)
+    ngx.header[ 'X-S2-shard-next' ] = json.enc((api_ctx.next_shard or {}).from)
+end
 
 
 local function _do_api(api_ctx)
@@ -50,6 +57,8 @@ local function _do_api(api_ctx)
         return nil, 'GetUpstreamError', string.format(
                 'failed to get upstream: %s, %s', err, errmsg)
     end
+
+    set_shard_header(api_ctx)
 
     local _, err, errmsg = sql_util.make_sqls(api_ctx)
     if err ~= nil then
@@ -90,6 +99,9 @@ function _M.do_api(opts)
 
     local resp_value, err, errmsg = _do_api(api_ctx)
     if err ~= nil then
+        ngx.log(ngx.ERR, string.format(
+                'failed to do api for subject: %s, action: %s, %s, %s',
+                api_ctx.subject, api_ctx.action, err, errmsg))
         resp = {error_code = err, error_message = errmsg}
     else
         resp = {value = resp_value}

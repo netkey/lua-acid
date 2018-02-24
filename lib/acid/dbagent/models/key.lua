@@ -119,7 +119,7 @@ _M.actions = {
         valid_param = {
             column = add_column,
         },
-        default = {crc32 = '000000000000'},
+        default = {crc32 = '00000000'},
     },
     set = {
         rw = 'w',
@@ -147,7 +147,7 @@ _M.actions = {
                 _ts = true,
             },
         },
-        default = {crc32 = '000000000000'},
+        default = {crc32 = '00000000'},
     },
     remove = {
         rw = 'w',

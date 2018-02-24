@@ -40,7 +40,7 @@ function _M.connect_db(connection_info, callbacks, query_opts)
     }
 
     if callbacks.before_connect_db ~= nil then
-        callbacks.before_connect(connection_info)
+        callbacks.before_connect_db(connection_info)
     end
 
     local ok, err, errcode, sqlstate = db:connect(options)

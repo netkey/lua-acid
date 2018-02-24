@@ -179,12 +179,12 @@ _M.actions = {
             range = {
                 log_ts = false,
             },
-            match = {
-                _level = false,
-                _source = false,
-                _log_file = false,
-                _node_id = false,
-                _node_ip = false,
+            ident = {
+                level = false,
+                source = false,
+                log_file = false,
+                node_id = false,
+                node_ip = false,
             },
             extra = {
                 desc = false,

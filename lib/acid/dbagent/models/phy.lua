@@ -6,7 +6,7 @@ local _M = {}
 
 _M.fields = {
     sha1 = {
-        field_type = 'bigint',
+        field_type = 'binary',
         m = 20,
     },
     ver = {
@@ -90,7 +90,7 @@ _M.actions = {
         valid_param = {
             column = add_column,
         },
-        default = {crc32 = '000000000000'},
+        default = {crc32 = '00000000'},
     },
     set = {
         rw = 'w',

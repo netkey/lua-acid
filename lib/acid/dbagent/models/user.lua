@@ -33,7 +33,7 @@ _M.fields = {
         field_type = 'bigint',
         m = 20,
     },
-    limiation = {
+    limitation = {
         field_type = 'text',
         m = nil,
         convert_method = 'json_null_to_table',

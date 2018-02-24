@@ -166,6 +166,16 @@ local function build_range_str(fields, range, args)
 
     local parts = {}
 
+    local greater_than = '>='
+    if tostring(args.leftopen) == '1' then
+        greater_than = '>'
+    end
+
+    local less_than = '<='
+    if tostring(args.rightopen) == '1' then
+        less_than = '<'
+    end
+
     for param_name, _ in pairs(range) do
         local field = fields[param_name]
         local value = args[param_name]
@@ -178,7 +188,8 @@ local function build_range_str(fields, range, args)
                 return nil, err, errmsg
             end
             table.insert(parts, string.format(
-                    '%s>=%s', field.backticked_name, quoted_value))
+                    '%s%s%s', field.backticked_name,
+                    greater_than, quoted_value))
 
             local quoted_value, err, errmsg = quote_value(
                     field, range_parts[2])
@@ -187,7 +198,8 @@ local function build_range_str(fields, range, args)
             end
 
             table.insert(parts, string.format(
-                    '%s<=%s', field.backticked_name, quoted_value))
+                    '%s%s%s', field.backticked_name,
+                    less_than, quoted_value))
         end
     end
 
@@ -214,7 +226,7 @@ local function build_greater_than_str(fields, matched_fields, args)
             table.insert(parts, string.format(
                     '%s=%s', field.backticked_name, quoted_value))
         else
-            if args.leftopen == true then
+            if tostring(args.leftopen) == '1' then
                 table.insert(parts, string.format(
                         '%s>%s', field.backticked_name, quoted_value))
             else
@@ -609,6 +621,40 @@ end
 function _M.make_count_sql(api_ctx)
     local fields = api_ctx.subject_model.fields
     local args = api_ctx.args
+    local action_model = api_ctx.action_model
+    local valid_param = action_model.valid_param
+
+    local opts = {}
+
+    opts.select_as_str = string.format('COUNT(*) as `%s`',
+                                       action_model.count_as)
+
+    if action_model.index_to_use ~= nil then
+        opts.force_index_str = string.format(
+                ' FORCE INDEX (%s)', action_model.index_to_use)
+    end
+
+    opts.range_str = build_range_str(fields, valid_param.range, args)
+
+    local sql, err, errmsg = build_select_sql(
+            api_ctx.upstream.table_name,
+            api_ctx.subject_model.fields,
+            api_ctx.action_model,
+            api_ctx.args,
+            opts)
+    if err ~= nil then
+        return nil, err, errmsg
+    end
+
+    api_ctx.sqls = {sql}
+
+    return sql, nil, nil
+end
+
+
+function _M.make_group_by_sql(api_ctx)
+    local fields = api_ctx.subject_model.fields
+    local args = api_ctx.args
     local valid_param = api_ctx.action_model.valid_param
 
     local opts = {}
@@ -691,13 +737,14 @@ end
 _M.sql_maker = {
     add = _M.make_add_sql,
     set = _M.make_set_sql,
-    increase = _M.make_increase_sql,
+    incr = _M.make_increase_sql,
     get = _M.make_get_sql,
     get_multi = _M.make_get_multi_sql,
     indexed_ls = _M.make_indexed_ls_sql,
     ls = _M.make_indexed_ls_sql,
-    remove = _M.make_remove_sql,
     count = _M.make_count_sql,
+    group_by = _M.make_group_by_sql,
+    remove = _M.make_remove_sql,
     replace = _M.make_replace_sql,
 }
 
@@ -708,10 +755,11 @@ function _M.make_sqls(api_ctx)
 
     if sql_maker_func == nil then
         ngx.log(ngx.ERR, string.format(
-                'no sql maker function for subject: action: %s',
+                'no sql maker function for subject: %s, action: %s',
                 api_ctx.subject, api_ctx.action))
 
-        return nil, 'InternalError', 'no sql maker function'
+        return nil, 'MakeSqlError', string.format(
+                'no sql maker function for: %s', tostring(sql_type))
     end
 
     local _, err, errmsg = sql_maker_func(api_ctx)

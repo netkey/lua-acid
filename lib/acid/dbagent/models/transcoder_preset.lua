@@ -5,41 +5,57 @@ local _M = {}
 
 
 _M.fields = {
-    username = {
-        field_type = 'varchar',
-        m = 64,
-    },
-    accesskey = {
-        field_type = 'varchar',
-        m = 64,
-    },
-    secretkey = {
-        field_type = 'varchar',
-        m = 64,
-    },
-    ts = {
+    transcoder_preset_id = {
         field_type = 'bigint',
         m = 20,
     },
-    is_del = {
-        field_type = 'tinyint',
-        m = 4,
+    preset_name = {
+        field_type = 'varbinary',
+        m = 128,
+        no_hex = true,
+    },
+    preset_type = {
+        field_type = 'varbinary',
+        m = 32,
+        no_hex = true,
+    },
+    username = {
+        field_type = 'varbinary',
+        m = 64,
+        no_hex = true,
+    },
+    description = {
+        field_type = 'text',
+        m = nil,
+    },
+    settings = {
+        field_type = 'text',
+        m = nil,
+        convert_method = 'json_null_or_empty_to_table',
+    },
+    create_ts = {
+        field_type = 'bigint',
+        m = 20,
+    },
+    modify_ts = {
+        field_type = 'bigint',
+        m = 20,
     },
 }
+
 
 _M.shard_fields = {}
 
 
 local add_column = {}
-
-for name, _ in pairs(_M.fields) do
-    add_column[name] = true
+for field_name, _ in pairs(_M.fields) do
+    add_column[field_name] = true
 end
+add_column.transcoder_preset_id = nil
 
-add_column.is_del = false
-
-
-local ident = {accesskey = true}
+local ident = {
+    transcoder_preset_id = true
+}
 
 
 _M.actions = {
@@ -55,22 +71,15 @@ _M.actions = {
         sql_type = 'set',
         valid_param = {
             column = {
-                is_del=false,
-                ts=false,
+                settings = false,
+                description = false,
+                modify_ts = true,
             },
             ident = ident,
-        },
-    },
-    markdel = {
-        rw = 'w',
-        sql_type = 'set',
-        valid_param = {
-            column = {
-                is_del=false,
+            match = {
+                _modify_ts = false,
             },
-            ident = ident,
         },
-        default = {is_del = 1}
     },
     remove = {
         rw = 'w',
@@ -85,26 +94,24 @@ _M.actions = {
         valid_param = {
             ident = ident,
         },
-        unpack_list = true,
         select_column = tableutil.keys(_M.fields),
+        unpack_list = true,
     },
     ls = {
         rw = 'r',
         sql_type = 'indexed_ls',
         indexes = {
-            idx_username_accesskey = {
-                'username', 'accesskey',
-            },
-            idx_accesskey = {
-                'accesskey',
-            },
+            idx_username_transcoder_preset_id = {
+                'username', 'transcoder_preset_id',
+            }
         },
         valid_param = {
             index_columns = {
-                username = false,
-                accesskey = false,
+                username = true,
+                transcoder_preset_id = false,
             },
             extra = {
+                leftopen = false,
                 nlimit = false,
             },
         },
