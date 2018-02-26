@@ -2,6 +2,9 @@ local httpclient = require('acid.httpclient')
 local aws_signer = require('resty.awsauth.aws_signer')
 local acid_json = require('acid.json')
 local tableutil = require('acid.tableutil')
+local strutil = require('acid.strutil')
+
+local to_str = strutil.to_str
 
 
 local _M = { _VERSION = '0.0.1' }
@@ -9,9 +12,10 @@ local _M = { _VERSION = '0.0.1' }
 local mt = { __index = _M }
 
 
-function _M.new(core_ips, port, access_key, secret_key, opts)
-    if type(core_ips) ~= 'table' or type(core_ips[1]) ~= 'string' then
-        return nil, 'InvalidArgument', 'invalid core ips'
+function _M.new(dbagent_ips, port, access_key, secret_key, opts)
+    if type(dbagent_ips) ~= 'table' or type(dbagent_ips[1]) ~= 'string' then
+        return nil, 'InvaliddbgentIps', string.format(
+                'invalid dbagent ips: %s', to_str(dbagent_ips))
     end
     opts = opts or {}
 
@@ -28,7 +32,7 @@ function _M.new(core_ips, port, access_key, secret_key, opts)
     end
 
     return setmetatable({
-        core_ips = core_ips,
+        dbagent_ips = dbagent_ips,
         port = port,
         ignore = ignore,
         signer = signer,
@@ -60,15 +64,15 @@ function _M.raw_request(opts)
                                 {service_key = 'dbagent'})
 
     local _, err, errmsg = http:request(uri,
-                                     {method = 'POST',
-                                      headers = headers,
-                                      body = body})
+                                        {method = 'POST',
+                                         headers = headers,
+                                         body = body})
     if err ~= nil then
         return nil, 'HttpRequestError', string.format(
                 'failed to request ip: %s, %s, %s', ip, err, errmsg)
     end
 
-    local body = {}
+    local bufs = {}
     while true do
         local buf, err, errmsg = http:read_body(1024*1024*10)
         if err ~= nil then
@@ -80,10 +84,10 @@ function _M.raw_request(opts)
             break
         end
 
-        table.insert(body, buf)
+        table.insert(bufs, buf)
     end
 
-    local resp_body = table.concat(body)
+    local resp_body = table.concat(bufs)
 
     if http.status ~= 200 then
         return nil, 'InvalidResponse',
@@ -91,32 +95,32 @@ function _M.raw_request(opts)
                               ip, tostring(http.status), resp_body)
     end
 
-     if http.headers['connection'] == 'keep-alive' then
-         http:set_keepalive(30*1000, 16)
-     end
+    if http.headers['connection'] == 'keep-alive' then
+        http:set_keepalive(30*1000, 16)
+    end
 
     return {body = resp_body, headers = http.headers}, nil, nil
 end
 
 
-function _M.request_one_ip(self, core_ip, port, timeout, core2_request)
-    local core2_request_copy = tableutil.dup(core2_request, true)
-    core2_request_copy.headers.Host = core_ip
+function _M.request_one_ip(self, dbagent_ip, port, timeout, dbagent_request)
+    local dbagent_request_copy = tableutil.dup(dbagent_request, true)
+    dbagent_request_copy.headers.Host = dbagent_ip
 
-    local auth_ctx, err, errmsg = self.signer:add_auth_v4(
-            core2_request_copy, {sign_payload = true})
+    local _, err, errmsg = self.signer:add_auth_v4(
+            dbagent_request_copy, {sign_payload = true})
     if err ~= nil then
         return nil, 'AddAuthError', string.format(
                 'failed to add auth v4: %s, %s', err, errmsg)
     end
 
     local opts = {
-        ip = core_ip,
+        ip = dbagent_ip,
         port = port,
         timeout = timeout,
-        uri = core2_request_copy.uri,
-        headers = core2_request_copy.headers,
-        body = core2_request_copy.body
+        uri = dbagent_request_copy.uri,
+        headers = dbagent_request_copy.headers,
+        body = dbagent_request_copy.body
     }
     local resp, err, errmsg = _M.raw_request(opts)
     if err ~= nil then
@@ -127,23 +131,23 @@ function _M.request_one_ip(self, core_ip, port, timeout, core2_request)
 end
 
 
-function _M.do_request(self, core2_request)
+function _M.do_request(self, dbagent_request)
     local resp, err, msg
 
     local port = self.port
     local timeout = self.timeout
     local timeout_ratio = self.timeout_ratio
 
-    for _, core_ip in ipairs(self.core_ips) do
-        resp, err, msg = self:request_one_ip(core_ip, port, timeout,
-                                             core2_request)
+    for _, dbagent_ip in ipairs(self.dbagent_ips) do
+        resp, err, msg = self:request_one_ip(dbagent_ip, port, timeout,
+                                             dbagent_request)
         if err == nil then
             return resp, nil, nil
         end
 
         ngx.log(ngx.WARN, string.format(
-                'failed to request core ip %s: %s, %s',
-                core_ip, err, msg))
+                'failed to request dbagent ip %s: %s, %s',
+                dbagent_ip, err, msg))
 
         if self.retry_sleep > 0 then
             ngx.sleep(self.retry_sleep)
@@ -166,7 +170,7 @@ local function parse_response_body(response_body, ignore)
     end
 
     if result.error_code ~= nil then
-        return nil, 'OperationalError', response_body
+        return nil, 'OperationError', response_body
     end
 
     result = result.value
@@ -185,17 +189,18 @@ end
 
 local function load_shard(self, headers)
     local shard = {
-        ['shard-current']= headers['x-s2-shard-current'],
-        ['shard-next']= headers['x-s2-shard-next'],
+        ['shard-current'] = headers['x-s2-shard-current'],
+        ['shard-next'] = headers['x-s2-shard-next'],
     }
 
-    for s, v in pairs(shard) do
-        local v, err_msg = acid_json.dec(v)
-        if err_msg == nil then
-            self.sess[s] = v
+    for name, str_value in pairs(shard) do
+        local value, err = acid_json.dec(str_value)
+        if err ~= nil then
+            return nil, 'JsonDecodeError', string.format(
+                    'failed to decode shard header %s, %s: %s',
+                    name, str_value, err)
         else
-            ngx.log(ngx.ERR, string.format(
-                    'failed to decode header %s: %s', s, err_msg))
+            self.sess[name] = value
         end
     end
 end
@@ -204,7 +209,7 @@ end
 function _M.req(self, subject, action, params, opts)
     opts = opts or {}
 
-    local core2_request = {
+    local dbagent_request = {
         verb = 'POST',
         uri = '/api/' .. subject .. '/' .. action,
         args = {},
@@ -216,25 +221,27 @@ function _M.req(self, subject, action, params, opts)
         body = '',
     }
 
-    core2_request.body = acid_json.enc(params)
-    core2_request.headers['Content-Length'] = #core2_request.body
+    dbagent_request.body = acid_json.enc(params)
+    dbagent_request.headers['Content-Length'] = #dbagent_request.body
 
-    local resp, err, msg = self:do_request(core2_request)
+    local resp, err, errmsg = self:do_request(dbagent_request)
     if err ~= nil then
-        ngx.log(ngx.ERR, string.format('failed to request core2: %s, %s',
-                                       err, msg))
-        return nil, err, msg
+        return nil, 'DoRequestError', string.format(
+                'failed to request dbagent: %s, %s', err, errmsg)
     end
 
     local ignore = opts.ignore or self.ignore
-    local result, err, msg = parse_response_body(resp.body, ignore)
+    local result, err, errmsg = parse_response_body(resp.body, ignore)
     if err ~= nil then
-        ngx.log(ngx.ERR, string.format('failed to parse response: %s, %s',
-                                       err, msg))
-        return nil, err, msg
+        return nil, 'ParseResponseBodyError', string.format(
+                'failed to parse response body: %s, %s', err, errmsg)
     end
 
-    load_shard(self, resp.headers)
+    local _, err, errmsg = load_shard(self, resp.headers)
+    if err ~= nil then
+        return nil, 'LoadShardError', string.format(
+                'failed to load shard: %s, %s', err, errmsg)
+    end
 
     return result, nil, nil
 end
