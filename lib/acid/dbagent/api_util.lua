@@ -66,6 +66,9 @@ function _M.make_resp_value(api_ctx)
 
     local resp_value = api_ctx.query_result
     if api_ctx.action_model.unpack_list == true then
+        if #resp_value > 1 then
+            return nil, 'UnpackListError', 'more than one element in list'
+        end
         resp_value = resp_value[1]
     end
 
