@@ -50,6 +50,16 @@ _M.actions = {
         },
         select_column = tableutil.keys(_M.fields),
     },
+    wbygroup = {
+        rw = 'w',
+        sql_type = 'get_multi',
+        valid_param = {
+            ident = {
+                group_id = true,
+            },
+        },
+        select_column = tableutil.keys(_M.fields),
+    },
     bypartition = {
         rw = 'r',
         sql_type = 'get_multi',

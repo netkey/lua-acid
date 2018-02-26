@@ -64,7 +64,7 @@ function _M.init(opts)
                 'failed to load model module from: %s, %s, %s',
                 model_module_dir, err, errmsg))
     end
-    conf_util.init_conf(get_conf)
+    conf_util.init_conf_update(get_conf)
 end
 
 

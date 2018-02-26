@@ -32,6 +32,15 @@ local function build_string_schema(field)
 end
 
 
+local function build_string_number_schema(field)
+    local schema = {
+        ['type'] = 'string_number',
+    }
+
+    return {schema}
+end
+
+
 local function build_integer_schema(field)
     local _ = field
     local schema = {
@@ -46,7 +55,7 @@ local function build_integer_or_string_schema(field)
     local _ = field
     local schemas = {}
     tableutil.extends(schemas, build_integer_schema(field))
-    tableutil.extends(schemas, build_string_schema(field))
+    tableutil.extends(schemas, build_string_number_schema(field))
     return schemas
 end
 
@@ -84,8 +93,8 @@ local schema_builder = {
     varbinary = build_varbinary_schema,
     varchar = build_string_schema,
     text = build_string_schema,
-    tinyint = build_integer_schema,
-    int = build_integer_schema,
+    tinyint = build_integer_or_string_schema,
+    int = build_integer_or_string_schema,
     bigint = build_integer_or_string_schema,
 }
 

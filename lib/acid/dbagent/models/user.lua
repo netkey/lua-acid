@@ -56,6 +56,8 @@ local add_column = {}
 for name, _ in pairs(_M.fields) do
     add_column[name] = true
 end
+add_column.is_del = false
+add_column.max_nr_project = false
 
 
 local ident = { username = true }
@@ -68,6 +70,10 @@ _M.actions = {
         valid_param = {
             column = add_column,
         },
+        default = {
+            is_del = 0,
+            max_nr_project = 10,
+        }
     },
     set = {
         rw = 'w',
@@ -96,6 +102,15 @@ _M.actions = {
     },
     get = {
         rw = 'r',
+        sql_type = 'get',
+        valid_param = {
+            ident = ident,
+        },
+        unpack_list = true,
+        select_column = tableutil.keys(_M.fields),
+    },
+    wget = {
+        rw = 'w',
         sql_type = 'get',
         valid_param = {
             ident = ident,

@@ -209,6 +209,12 @@ end
 function _M.req(self, subject, action, params, opts)
     opts = opts or {}
 
+    for k, v in pairs(params) do
+        if type(v) == 'number' then
+            params[k] = tostring(v)
+        end
+    end
+
     local dbagent_request = {
         verb = 'POST',
         uri = '/api/' .. subject .. '/' .. action,

@@ -167,6 +167,16 @@ _M.actions = {
         select_column = tableutil.keys(_M.fields),
         unpack_list = true,
     },
+    wget = {
+        rw = 'w',
+        sql_type = 'get',
+        valid_param = {
+            ident = ident,
+            match = match,
+        },
+        select_column = tableutil.keys(_M.fields),
+        unpack_list = true,
+    },
     ls = {
         rw = 'r',
         sql_type = 'indexed_ls',

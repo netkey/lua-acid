@@ -43,11 +43,15 @@ function _M.get_upstream(api_ctx)
 
     local shard_fields_value = {}
     for _, field_name in ipairs(shard_fields) do
-        table.insert(shard_fields_value, api_ctx.args[field_name])
+        table.insert(shard_fields_value, tostring(api_ctx.args[field_name]))
     end
 
     if conf_util.conf == nil then
-        return nil, 'InternalError', 'conf not inited'
+        ngx.log(ngx.INFO, 'conf ##: conf not inited, init conf first')
+        local _, err, errmsg = conf_util.init_conf()
+        if err ~= nil then
+            return nil, err, errmsg
+        end
     end
 
     api_ctx.conf = conf_util.conf.value
