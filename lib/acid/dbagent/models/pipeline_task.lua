@@ -40,7 +40,7 @@ _M.fields = {
     consumer_id = {
         field_type = 'bigint',
         m = 20,
-    }
+    },
     result = {
         field_type = 'text',
         m = nil,
