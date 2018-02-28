@@ -1,8 +1,7 @@
-local tableutil = require('acid.tableutil')
-local fsutil = require('acid.fsutil')
-local strutil = require('acid.strutil')
-local sql_util = require('acid.dbagent.sql_util')
 local arg_util = require('acid.dbagent.arg_util')
+local fsutil = require('acid.fsutil')
+local sql_util = require('acid.dbagent.sql_util')
+local strutil = require('acid.strutil')
 
 
 local _M = {}

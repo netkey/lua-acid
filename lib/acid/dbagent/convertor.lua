@@ -1,9 +1,5 @@
-local strutil = require('acid.strutil')
-local tableutil = require('acid.tableutil')
 local json = require('acid.json')
-local repr = tableutil.repr
 
-local to_str = strutil.to_str
 
 local _M = {}
 
@@ -58,10 +54,10 @@ local function acl_json_encode(acl)
                 tostring(acl), type(acl))
     end
 
-    for grantee, perms in pairs(acl) do
+    for _, perms in pairs(acl) do
         if type(perms) ~= 'table' then
             return nil, 'InvalidAclPermissions', string.format(
-                    'permissions: %s, is not a tablae, is type: %s',
+                    'permissions: %s, is not a table, is type: %s',
                     tostring(perms), type(perms))
         end
         setmetatable(perms, json.empty_array_mt)
@@ -83,7 +79,7 @@ local function acl_json_decode(acl_text)
                 acl_text, err)
     end
 
-    for grantee, perms in pairs(acl) do
+    for _, perms in pairs(acl) do
         if #perms == 0 then
             setmetatable(perms, json.empty_array_mt)
         end

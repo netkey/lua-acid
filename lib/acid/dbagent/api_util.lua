@@ -1,7 +1,6 @@
+local convertor = require('acid.dbagent.convertor')
 local json = require('acid.json')
 local strutil = require('acid.strutil')
-local convertor = require('acid.dbagent.convertor')
-local to_str = strutil.to_str
 
 
 local _M = {}

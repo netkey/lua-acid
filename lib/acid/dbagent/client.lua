@@ -1,8 +1,8 @@
-local httpclient = require('acid.httpclient')
-local aws_signer = require('resty.awsauth.aws_signer')
 local acid_json = require('acid.json')
-local tableutil = require('acid.tableutil')
+local aws_signer = require('resty.awsauth.aws_signer')
+local httpclient = require('acid.httpclient')
 local strutil = require('acid.strutil')
+local tableutil = require('acid.tableutil')
 
 local to_str = strutil.to_str
 

@@ -1,9 +1,4 @@
---local etcd_client = require('acid.etcd_client')
 local ngx_timer = require('ngx_timer')
-local json = require('acid.json')
-local tableutil = require('acid.tableutil')
-local util = require('acid.dbagent.util')
-
 
 local _M = {}
 
@@ -67,7 +62,7 @@ end
 
 
 function _M.init_conf()
-    for i = 1, 100 do
+    for _ = 1, 100 do
         if _M.locked == 1 then
             ngx.sleep(0.05)
         else

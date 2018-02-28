@@ -4,8 +4,8 @@ local model_module = require('acid.dbagent.model_module')
 local _M = {}
 
 
-local function test_get_conf(curr_version)
-    if curr_version ~= nil then
+local function test_get_conf(curr_conf)
+    if curr_conf ~= nil then
         ngx.sleep(5)
     end
 

@@ -1,9 +1,7 @@
-local conf_util = require('acid.dbagent.conf_util')
 local bisect = require('acid.bisect')
+local conf_util = require('acid.dbagent.conf_util')
 local tableutil = require('acid.tableutil')
-local strutil = require('acid.strutil')
-local to_str = strutil.to_str
---local throttle = require('dbagent.throttle')
+
 local repr = tableutil.repr
 
 local _M = {}

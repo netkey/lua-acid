@@ -1,5 +1,5 @@
-local time = require('acid.time')
 local json = require('acid.json')
+local time = require('acid.time')
 
 local _M = {}
 
@@ -70,7 +70,6 @@ function _M.shared_dict_dump(shared_dict_name)
 
     return data, nil, nil
 end
-
 
 
 return _M

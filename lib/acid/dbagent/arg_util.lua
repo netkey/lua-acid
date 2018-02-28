@@ -1,8 +1,6 @@
 local strutil = require('acid.strutil')
 local tableutil = require('acid.tableutil')
 local arg_schema_checker = require('arg_schema_checker')
-local json = require('acid.json')
-local repr = tableutil.repr
 
 local to_str = strutil.to_str
 
@@ -33,6 +31,7 @@ end
 
 
 local function build_string_number_schema(field)
+    local _ = field
     local schema = {
         ['type'] = 'string_number',
     }
@@ -108,7 +107,7 @@ function _M.build_field_schema(field)
     local builder = schema_builder[field.field_type]
 
     if builder == nil then
-        ngx.log(ngx.ERR, 'no schema builder for: ' .. failed.field_type)
+        ngx.log(ngx.ERR, 'no schema builder for: ' .. field.field_type)
         return
     end
 
@@ -185,8 +184,6 @@ function _M.check(api_ctx)
     local args = api_ctx.args
     local subject_model = api_ctx.subject_model
     local action_model = api_ctx.action_model
-
-    --ngx.log(ngx.ERR, 'test------------' .. repr(api_ctx.subject_model.fields))
 
     local _, err, errmsg = schema_check(args, subject_model)
     if err ~= nil then

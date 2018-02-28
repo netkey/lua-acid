@@ -1,15 +1,13 @@
-local util = require('acid.dbagent.util')
---local statistic = require('acid.dbagent.statistic')
 local api_util = require('acid.dbagent.api_util')
-local sql_util = require('acid.dbagent.sql_util')
-local mysql_util = require('acid.dbagent.mysql_util')
-local model_module = require('acid.dbagent.model_module')
 local arg_util = require('acid.dbagent.arg_util')
-local json = require('acid.json')
-local upstream_util = require('acid.dbagent.upstream_util')
-local tableutil = require('acid.tableutil')
 local convertor = require('acid.dbagent.convertor')
-local repr = tableutil.repr
+local json = require('acid.json')
+local model_module = require('acid.dbagent.model_module')
+local mysql_util = require('acid.dbagent.mysql_util')
+local sql_util = require('acid.dbagent.sql_util')
+local tableutil = require('acid.tableutil')
+local upstream_util = require('acid.dbagent.upstream_util')
+local util = require('acid.dbagent.util')
 
 
 local _M = {}

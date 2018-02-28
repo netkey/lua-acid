@@ -1,11 +1,7 @@
+local mysql = require('resty.mysql')
 local strutil = require('acid.strutil')
 local upstream_util = require('acid.dbagent.upstream_util')
-local mysql = require('resty.mysql')
 local util = require('acid.dbagent.util')
-local json = require('acid.json')
-local tableutil = require('acid.tableutil')
-local repr = tableutil.repr
-local cjson = require('cjson')
 
 local to_str = strutil.to_str
 
