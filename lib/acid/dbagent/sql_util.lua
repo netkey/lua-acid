@@ -1,4 +1,5 @@
 local strutil = require('acid.strutil')
+local tableutil = require('acid.tableutil')
 
 local to_str = strutil.to_str
 
@@ -180,7 +181,7 @@ local function build_range_str(fields, range, args)
         local field = fields[param_name]
         local value = args[param_name]
         if value ~= nil  then
-            local range_parts = strutil.split(value, ',')
+            local range_parts = strutil.split(value, ',', {plain=true})
 
             local quoted_value, err, errmsg = quote_value(
                     field, range_parts[1])
@@ -307,6 +308,52 @@ local function build_where_str(conditions)
 end
 
 
+local function build_order_by_str(fields, args)
+    local order_by_arg_value = args['order_by']
+
+    if order_by_arg_value == nil then
+        return '', nil, nil
+    end
+
+    if type(order_by_arg_value) ~= 'string' then
+        return nil, 'InvalidArgument', string.format(
+                'invalid order_by arg value: %s, is not string, is type: %s',
+                tostring(order_by_arg_value), type(order_by_arg_value))
+    end
+
+    local order_by_parts = {}
+
+    -- args['order_by'] = 'owner ASC, key, size DESC'
+    local field_parts = strutil.split(order_by_arg_value, ',', {plain=true})
+    for field_part in ipairs(field_parts) do
+        local parts = strutil.split(field_part, ' ', {plain=true})
+        local field_name = parts[1]
+        local order_type = parts[2] or ''
+
+        local field = fields[field_name]
+        if field == nil then
+            return nil, 'InvalidOrderByArgValue', string.format(
+                    'invalid order_by arg value: %s, field: %s not exist',
+                    order_by_arg_value, field_name)
+        end
+
+        if not tableutil.has({'ASC', 'DESC', ''}, order_type) then
+            return nil, 'InvalidOrderByArgValue', string.format(
+                    'invalid order_by arg value: %s, order type: %s is invalid',
+                    order_by_arg_value, order_type)
+        end
+
+        if order_type == '' then
+            table.insert(order_by_parts, field.backticked_name)
+        else
+            table.insert(order_by_parts, field.backticked_name .. ' ' .. order_type)
+        end
+    end
+
+    return table.concat(order_by_parts, ', ')
+end
+
+
 local function build_insert_sql(table_name, fields, action_model, args)
     local names = {}
     local values = {}
@@ -381,8 +428,18 @@ local function build_update_sql(table_name, fields, action_model, args,
 end
 
 
-local function build_delete_sql(table_name, fields, action_model, args)
+local function build_delete_sql(table_name, fields, action_model, args, opts)
+    if opts == nil then
+        opts = {}
+    end
+
     local valid_param = action_model.valid_param
+
+    local range_str, err, errmsg = build_range_str(fields, valid_param.range, args)
+    if err ~= nil then
+        return nil, err, errmsg
+    end
+
     local ident_str, err, errmsg = build_equal_str(
             fields, valid_param.ident, args, ' AND ')
     if err ~= nil then
@@ -395,10 +452,14 @@ local function build_delete_sql(table_name, fields, action_model, args)
         return nil, err, errmsg
     end
 
-    local where_str = build_where_str({ident_str, match_str})
+    local where_str = build_where_str({range_str, ident_str, match_str})
 
-    local sql = string.format('DELETE IGNORE FROM `%s`%s LIMIT 1',
+    local sql = string.format('DELETE IGNORE FROM `%s`%s',
                               table_name, where_str)
+    if opts.limit ~= nil then
+        sql = sql .. ' LIMIT ' .. tostring(opts.limit)
+    end
+
     return sql, nil, nil
 end
 
@@ -489,6 +550,15 @@ local function build_select_sql(table_name, fields, action_model, args, opts)
 
     if opts.group_by_str ~= nil then
         sql = sql .. ' ' .. opts.group_by_str
+    end
+
+    local order_by_str, err, errmsg = build_order_by_str(fields, args)
+    if err ~= nil then
+        return nil, err, errmsg
+    end
+
+    if order_by_str ~= '' then
+        sql = sql .. ' ORDER BY ' .. order_by_str
     end
 
     if type(opts.limit) == 'number' then
@@ -634,7 +704,12 @@ function _M.make_count_sql(api_ctx)
                 ' FORCE INDEX (%s)', action_model.index_to_use)
     end
 
-    opts.range_str = build_range_str(fields, valid_param.range, args)
+    local range_str, err, errmsg = build_range_str(fields, valid_param.range,
+                                                   args)
+    if err ~= nil then
+        return nil, err, errmsg
+    end
+    opts.range_str = range_str
 
     local sql, err, errmsg = build_select_sql(
             api_ctx.upstream.table_name,
@@ -669,14 +744,19 @@ function _M.make_group_by_sql(api_ctx)
     opts.select_as_str = string.format('%s,COUNT(*) as `count`',
                                        group_by_field.as_str)
 
-    opts.range_str = build_range_str(fields, valid_param.range, args)
+    local range_str, err, errmsg = build_range_str(fields, valid_param.range,
+                                                   args)
+    if err ~= nil then
+        return nil, err, errmsg
+    end
+    opts.range_str = range_str
 
     local group_by_str = string.format(' GROUP BY %s',
                                        group_by_field.backticked_name)
 
-    if args.desc ~= nil then
+    if args.group_by_desc ~= nil then
         group_by_str = group_by_str .. ' DESC'
-    elseif args.ase ~= nil then
+    elseif args.group_by_ase ~= nil then
         group_by_str = group_by_str .. ' ASC'
     end
 
@@ -705,6 +785,23 @@ function _M.make_remove_sql(api_ctx)
             api_ctx.action_model,
             api_ctx.args,
             {limit=1})
+    if err ~= nil then
+        return nil, err, errmsg
+    end
+
+    api_ctx.sqls = {sql}
+
+    return sql, nil, nil
+end
+
+
+function _M.make_remove_multi_sql(api_ctx)
+    local sql, err, errmsg = build_delete_sql(
+            api_ctx.upstream.table_name,
+            api_ctx.subject_model.fields,
+            api_ctx.action_model,
+            api_ctx.args,
+            {})
     if err ~= nil then
         return nil, err, errmsg
     end
@@ -745,6 +842,7 @@ _M.sql_maker = {
     count = _M.make_count_sql,
     group_by = _M.make_group_by_sql,
     remove = _M.make_remove_sql,
+    remove_multi = _M.make_remove_multi_sql,
     replace = _M.make_replace_sql,
 }
 

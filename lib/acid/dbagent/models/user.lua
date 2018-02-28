@@ -126,7 +126,6 @@ _M.actions = {
                 email = true,
             },
         },
-        unpack_list = true,
         select_column = tableutil.keys(_M.fields),
     },
     ls = {

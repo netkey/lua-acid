@@ -6,79 +6,40 @@ local _M = {}
 
 _M.fields = {
     level = {
-        checker = {
-            ['type'] = 'string',
-            max_length = 16,
-        },
         field_type = 'varchar',
+        m = 16,
     },
     log_ts = {
-        checker = {
-            {
-                ['type'] = 'integer',
-            },
-            {
-                ['type'] = 'string_number',
-            },
-        },
         field_type = 'bigint',
-    },
-    source = {
-        checker = {
-            ['type'] = 'string',
-            max_length = 512,
-        },
-        field_type = 'varchar',
-    },
-    log_file = {
-        checker = {
-            ['type'] = 'string',
-            max_length = 512,
-        },
-        field_type = 'varchar',
-    },
-    line_number = {
-        checker = {
-            {
-                ['type'] = 'integer',
-            },
-            {
-                ['type'] = 'string_number',
-            },
-        },
-        field_type = 'int',
+        m = 20,
     },
     content = {
-        checker = {
-            ['type'] = 'string',
-            max_length = 4096,
-        },
         field_type = 'varchar',
+        m = 4096,
+    },
+    log_file = {
+        field_type = 'varchar',
+        m = 512,
+    },
+    source_file = {
+        field_type = 'varchar',
+        m = 16,
+    },
+    line_number = {
+        field_type = 'int',
+        m = 11,
     },
     node_id = {
-        checker = {
-            ['type'] = 'string',
-            max_length = 16,
-        },
         field_type = 'varchar',
+        m = 16,
     },
     node_ip = {
-        checker = {
-            ['type'] = 'string',
-            max_length = 16,
-        },
         field_type = 'varchar',
+        m = 16,
     },
     count = {
-        checker = {
-            {
-                ['type'] = 'integer',
-            },
-            {
-                ['type'] = 'string_number',
-            },
-        },
         field_type = 'int',
+        m = 11,
     },
 }
 
@@ -86,111 +47,99 @@ _M.fields = {
 _M.shard_fields = {}
 
 
+local add_column = {}
+for field_name, _ in pairs(_M.fields) do
+    add_column[field_name] = true
+end
+
+
 _M.actions = {
     add = {
         rw = 'w',
+        sql_type = 'add',
         valid_param = {
-            column = {
-                level = true,
+            column = add_column,
+        },
+    },
+    remove_multi = {
+        rw = 'w',
+        sql_type = 'remove_multi',
+        valid_param = {
+            range = {
                 log_ts = true,
-                source = true,
-                log_file = true,
-                line_number = true,
-                content = true,
-                node_id = true,
-                node_ip = true,
-                count = true,
+            },
+            ident = {
+                log_file = false,
+                source_file = false,
+                line_number = false,
+                node_id = false,
+                node_ip = false,
             },
         },
     },
     ls = {
         rw = 'r',
-        all_index = {
-            {'log_ts', '_id'},
-            {'node_ip', '_id'},
+        sql_type = 'indexed_ls',
+        indexes = {
+            idx_log_ts = {
+                'log_ts',
+            },
+            idx_node_ip_log_ts = {
+                'node_ip', 'log_ts',
+            },
+            PRIMARY = {
+                '_id',
+            },
         },
         valid_param = {
-            index_keys = {
-                level = false,
+            index_columns = {
+                node_ip = false,
+                _id = false,
+            },
+            range = {
                 log_ts = false,
-                source = false,
+            },
+            ident = {
                 log_file = false,
+                source_file = false,
+                line_number = false,
                 node_id = false,
                 node_ip = false,
-            },
-            match = {
-                _level = false,
-                _log_ts = false,
-                _source = false,
-                _log_file = false,
-                _node_id = false,
-                _node_ip = false,
             },
             extra = {
                 leftopen = false,
+                order_by = false,
                 nlimit = false,
             },
         },
+        query_opts = {
+            timeout = 3000,
+        },
         select_column = tableutil.keys(_M.fields),
     },
-    remove = {
-        rw = 'w',
-        valid_param = {
-            ident = {
-                level = false,
-                log_ts = false,
-                source = false,
-                log_file = false,
-                node_id = false,
-                node_ip = false,
-            },
-            match = {
-                _level = false,
-                _log_ts = false,
-                _source = false,
-                _log_file = false,
-                _node_id = false,
-                _node_ip = false,
-            },
-        },
-    },
-    set = {
-        rw = 'w',
-        valid_param = {
-            column = {
-                level = false,
-                log_ts = false,
-                source = false,
-                log_file = false,
-            },
-            ident = {
-                level = false,
-                log_ts = false,
-                source = false,
-                log_file = false,
-                node_id = false,
-                node_ip = false,
-            },
-        },
-    },
-    count = {
+    groupby = {
         rw = 'r',
+        sql_type = 'gorup_by',
         valid_param = {
             range = {
                 log_ts = false,
             },
             ident = {
                 level = false,
-                source = false,
                 log_file = false,
+                source_file = false,
+                line_number = false,
                 node_id = false,
                 node_ip = false,
             },
             extra = {
-                desc = false,
-                asc = false,
                 group_by = true,
+                group_by_asc = false,
+                group_by_desc = false,
             },
+        },
+        query_opts = {
+            timeout = 3000,
         },
     },
 }
